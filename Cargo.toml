@@ -8,6 +8,7 @@ edition = "2018"
 categories = ["parser-implementations"]
 license = "MIT"
 keywords = ["robots", "txt", "parse", "compile"]
+repository = "https://github.com/crestonbunch/cylon"
 
 [dependencies]
 futures-util = "0.3"
