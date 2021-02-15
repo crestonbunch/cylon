@@ -1,0 +1,22 @@
+[package]
+name = "cylon"
+version = "0.1.0"
+authors = ["Creston Bunch <rust@bunch.im>"]
+edition = "2018"
+
+categories = ["parser-implementations"]
+license = "MIT"
+keywords = ["robots", "txt", "parse", "compile"]
+
+[dependencies]
+futures-util = "0.3"
+serde = "1.0"
+serde_derive = "1.0"
+
+[dev-dependencies]
+criterion = { version = "0.3", features = ["async_futures"] }
+tokio-test = "0.4"
+
+[[bench]]
+name = "parse"
+harness = false
