@@ -1,3 +1,4 @@
+#[cfg(feature = "crawl-delay")]
 use std::cmp::Ordering;
 
 use serde_derive::{Deserialize, Serialize};
@@ -45,10 +46,12 @@ enum State {
 pub struct Cylon {
     states: Vec<State>,
     transitions: Vec<Vec<Transition>>,
+    #[cfg(feature = "crawl-delay")]
     delay: Option<u64>,
 }
 
 impl Cylon {
+    #[cfg(feature = "crawl-delay")]
     pub fn delay(&self) -> Option<u64> {
         self.delay
     }
@@ -204,28 +207,34 @@ impl Cylon {
             transitions.push(t);
         }
 
-        let mut delays: Vec<Option<u64>> = rules.iter().filter(|rule| { 
-            match rule {
-                Rule::Delay(_) => true,
-                _ => false
-            }
-        }).map(|r| {
-            r.inner().parse::<u64>().ok()
-        }).collect();
-        delays.sort_unstable_by(|a, b| {
-            match (a, b) {
-                (None, Some(_)) => Ordering::Greater,
-                (Some(_), None) => Ordering::Less,
-                (None, None) => Ordering::Equal,
-                (Some(aa), Some(bb)) => aa.cmp(bb)
+        #[cfg(feature = "crawl-delay")]
+        {
+            let mut delays: Vec<Option<u64>> = rules.iter().filter(|rule| { 
+                match rule {
+                    Rule::Delay(_) => true,
+                    _ => false
+                }
+            }).map(|r| {
+                r.inner().parse::<u64>().ok()
+            }).collect();
+            delays.sort_unstable_by(|a, b| {
+                match (a, b) {
+                    (None, Some(_)) => Ordering::Greater,
+                    (Some(_), None) => Ordering::Less,
+                    (None, None) => Ordering::Equal,
+                    (Some(aa), Some(bb)) => aa.cmp(bb)
 
+                }
+            });
+            Self {
+                delay: *delays.get(0).unwrap_or(&None),
+                states,
+                transitions,
             }
-        });
-        
-            
+        }
 
+        #[cfg(not(feature = "crawl-delay"))]
         Self {
-            delay: *delays.get(0).unwrap_or(&None),
             states,
             transitions,
         }

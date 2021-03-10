@@ -312,6 +312,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "crawl-delay")]
     fn test_crawl_delay() {
         tokio_test::block_on(async {
             let example_robots = r#"
