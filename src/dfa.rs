@@ -7,6 +7,7 @@ use serde_derive::{Deserialize, Serialize};
 pub enum Rule<'a> {
     Allow(&'a str),
     Disallow(&'a str),
+    #[cfg(feature = "crawl-delay")]
     Delay(&'a str),
 }
 
@@ -15,6 +16,7 @@ impl<'a> Rule<'a> {
         match self {
             Rule::Allow(inner) => inner,
             Rule::Disallow(inner) => inner,
+            #[cfg(feature = "crawl-delay")]
             Rule::Delay(inner) => inner,
         }
     }
