@@ -1,10 +1,12 @@
+use std::cmp::Ordering;
+
 use serde_derive::{Deserialize, Serialize};
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Rule<'a> {
     Allow(&'a str),
     Disallow(&'a str),
-    Delay(u64),
+    Delay(&'a str),
 }
 
 impl<'a> Rule<'a> {
@@ -31,6 +33,7 @@ struct Transition(Edge, usize);
 enum State {
     Allow,
     Disallow,
+    Delay,
     Intermediate,
 }
 
@@ -42,12 +45,26 @@ enum State {
 pub struct Cylon {
     states: Vec<State>,
     transitions: Vec<Vec<Transition>>,
+    delay: Option<u64>,
 }
 
 impl Cylon {
+    pub fn delay(&self) -> Option<u64> {
+        self.delay
+    }
+
     /// Match whether the rules allow or disallow the target path.
     pub fn allow(&self, path: &str) -> bool {
-        let mut state = path.chars().fold(2, |state, path_char| {
+        match self.states[self.state(path)] {
+            State::Allow => true,
+            State::Disallow => false,
+            // Intermediate states are not preserved in the DFA
+            State::Intermediate | State::Delay => unreachable!(),
+        }
+    }
+
+    fn state(&self, path: &str) -> usize {
+        let state = path.chars().fold(2, |state, path_char| {
             let t = &self.transitions[state];
             t.iter()
                 .rev()
@@ -66,7 +83,7 @@ impl Cylon {
 
         // Follow the EoW transition, if necessary
         let t = &self.transitions[state];
-        state = t
+        t
             .iter()
             .rev()
             .find(|transition| match transition {
@@ -75,14 +92,7 @@ impl Cylon {
                 _ => false,
             })
             .map(|Transition(.., next_state)| *next_state)
-            .unwrap_or(state);
-
-        match self.states[state] {
-            State::Allow => true,
-            State::Disallow => false,
-            // Intermediate states are not preserved in the DFA
-            State::Intermediate => unreachable!(),
-        }
+            .unwrap_or(state)
     }
 
     /// Compile a machine from a list of rules.
@@ -116,6 +126,7 @@ impl Cylon {
                 State::Allow => 0,
                 State::Disallow if last_char == Some('$') => wildcard_state,
                 State::Disallow => 1,
+                State::Delay => 1,
                 State::Intermediate => wildcard_state,
             };
 
@@ -157,6 +168,7 @@ impl Cylon {
                     let state = match (rule, eow) {
                         (Rule::Allow(..), true) => State::Allow,
                         (Rule::Disallow(..), true) => State::Disallow,
+                        (Rule::Delay(..), true) => State::Delay,
                         _ => State::Intermediate,
                     };
 
@@ -186,13 +198,34 @@ impl Cylon {
                 });
 
             states.push(match state {
-                State::Allow | State::Disallow => state,
+                State::Allow | State::Disallow  | State::Delay => state,
                 State::Intermediate => states[wildcard_state],
             });
             transitions.push(t);
         }
 
+        let mut delays: Vec<Option<u64>> = rules.iter().filter(|rule| { 
+            match rule {
+                Rule::Delay(_) => true,
+                _ => false
+            }
+        }).map(|r| {
+            r.inner().parse::<u64>().ok()
+        }).collect();
+        delays.sort_unstable_by(|a, b| {
+            match (a, b) {
+                (None, Some(_)) => Ordering::Greater,
+                (Some(_), None) => Ordering::Less,
+                (None, None) => Ordering::Equal,
+                (Some(aa), Some(bb)) => aa.cmp(bb)
+
+            }
+        });
+        
+            
+
         Self {
+            delay: *delays.get(0).unwrap_or(&None),
             states,
             transitions,
         }

@@ -13,7 +13,7 @@ const DISALLOW_PREFIX: &str = "disallow:";
 enum ParsedRule {
     Allow(String),
     Disallow(String),
-    Delay(u64),
+    Delay(String),
 }
 
 impl<'a> Into<Rule<'a>> for &'a ParsedRule {
@@ -21,7 +21,7 @@ impl<'a> Into<Rule<'a>> for &'a ParsedRule {
         match self {
             ParsedRule::Allow(path) => Rule::Allow(&path[..]),
             ParsedRule::Disallow(path) => Rule::Disallow(&path[..]),
-            ParsedRule::Delay(delay) => Rule.Delay(delay),
+            ParsedRule::Delay(delay) => Rule::Delay(delay),
         }
     }
 }
@@ -199,7 +199,7 @@ fn parse_user_agent(line: &str) -> Option<&str> {
     }
 }
 
-fn parse_delay(line: &str) -> Option<u64> {
+fn parse_delay(line: &str) -> Option<&str> {
     if line.len() < DELAY_PREFIX.len() {
         return None;
     }
@@ -312,11 +312,54 @@ mod tests {
     }
 
     #[test]
+    fn test_crawl_delay() {
+        tokio_test::block_on(async {
+            let example_robots = r#"
+            User-agent: jones-bot
+            Disallow: /
+            Crawl-Delay: 30
+
+            User-agent: foobar
+            Crawl-Delay: 60
+
+            User-agent: googlebot
+            Allow: /
+
+            User-agent: barfoo
+            Crawl-Delay: 60
+            Crawl-Delay: 20
+            "#
+            .as_bytes();
+
+            let parser = Compiler::new("foobar");
+            let foobar_machine = parser.compile(example_robots).await.unwrap();
+
+            let parser = Compiler::new("googlebot");
+            let googlebot_machine = parser.compile(example_robots).await.unwrap();
+
+            let parser = Compiler::new("barfoo");
+            let barfoo_machine = parser.compile(example_robots).await.unwrap();
+
+            let parser = Compiler::new("jones-bot");
+            let jonesbot_machine = parser.compile(example_robots).await.unwrap();
+
+            assert_eq!(Some(60), foobar_machine.delay());
+            assert_eq!(Some(20), barfoo_machine.delay());
+            assert_eq!(Some(30), jonesbot_machine.delay());
+            assert_eq!(None, googlebot_machine.delay());
+        });
+    }
+
+    #[test]
     fn test_end_to_end() {
         tokio_test::block_on(async {
             let example_robots = r#"
             User-agent: jones-bot
             Disallow: /
+
+            User-agent: foo
+            Allow: /
+            Crawl-Delay: 20
 
             User-agent: jones
             User-agent: foobar
