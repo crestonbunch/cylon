@@ -34,6 +34,7 @@ struct Transition(Edge, usize);
 enum State {
     Allow,
     Disallow,
+    #[cfg(feature = "crawl-delay")]
     Delay,
     Intermediate,
 }
@@ -62,7 +63,10 @@ impl Cylon {
             State::Allow => true,
             State::Disallow => false,
             // Intermediate states are not preserved in the DFA
+            #[cfg(feature = "crawl-delay")]
             State::Intermediate | State::Delay => unreachable!(),
+            #[cfg(not(feature = "crawl-delay"))]
+            State::Intermediate => unreachable!(),
         }
     }
 
@@ -129,6 +133,7 @@ impl Cylon {
                 State::Allow => 0,
                 State::Disallow if last_char == Some('$') => wildcard_state,
                 State::Disallow => 1,
+                #[cfg(feature = "crawl-delay")]
                 State::Delay => 1,
                 State::Intermediate => wildcard_state,
             };
@@ -171,6 +176,7 @@ impl Cylon {
                     let state = match (rule, eow) {
                         (Rule::Allow(..), true) => State::Allow,
                         (Rule::Disallow(..), true) => State::Disallow,
+                        #[cfg(feature = "crawl-delay")]
                         (Rule::Delay(..), true) => State::Delay,
                         _ => State::Intermediate,
                     };
@@ -201,7 +207,10 @@ impl Cylon {
                 });
 
             states.push(match state {
+                #[cfg(feature = "crawl-delay")]
                 State::Allow | State::Disallow  | State::Delay => state,
+                #[cfg(not(feature = "crawl-delay"))]
+                State::Allow | State::Disallow => state,
                 State::Intermediate => states[wildcard_state],
             });
             transitions.push(t);
