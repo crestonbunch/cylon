@@ -4,6 +4,7 @@ use serde_derive::{Deserialize, Serialize};
 pub enum Rule<'a> {
     Allow(&'a str),
     Disallow(&'a str),
+    Delay(u64),
 }
 
 impl<'a> Rule<'a> {
@@ -11,6 +12,7 @@ impl<'a> Rule<'a> {
         match self {
             Rule::Allow(inner) => inner,
             Rule::Disallow(inner) => inner,
+            Rule::Delay(inner) => inner,
         }
     }
 }

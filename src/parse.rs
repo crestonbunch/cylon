@@ -5,6 +5,7 @@ use futures_util::{
 };
 use serde_derive::{Deserialize, Serialize};
 const UA_PREFIX: &str = "user-agent:";
+const DELAY_PREFIX: &str = "crawl-delay:";
 const ALLOW_PREFIX: &str = "allow:";
 const DISALLOW_PREFIX: &str = "disallow:";
 
@@ -12,6 +13,7 @@ const DISALLOW_PREFIX: &str = "disallow:";
 enum ParsedRule {
     Allow(String),
     Disallow(String),
+    Delay(u64),
 }
 
 impl<'a> Into<Rule<'a>> for &'a ParsedRule {
@@ -19,6 +21,7 @@ impl<'a> Into<Rule<'a>> for &'a ParsedRule {
         match self {
             ParsedRule::Allow(path) => Rule::Allow(&path[..]),
             ParsedRule::Disallow(path) => Rule::Disallow(&path[..]),
+            ParsedRule::Delay(delay) => Rule.Delay(delay),
         }
     }
 }
@@ -171,6 +174,7 @@ fn parse_line(line: String) -> ParsedLine {
         .map(|s| ParsedLine::Rule(ParsedRule::Disallow(s.into())))
         .or_else(|| parse_user_agent(line).map(|s| ParsedLine::UserAgent(s.to_lowercase())))
         .or_else(|| parse_allow(line).map(|s| ParsedLine::Rule(ParsedRule::Allow(s.into()))))
+        .or_else(|| parse_delay(line).map(|s| ParsedLine::Rule(ParsedRule::Delay(s.into()))))
         .unwrap_or(ParsedLine::Nothing)
 }
 
@@ -189,6 +193,20 @@ fn parse_user_agent(line: &str) -> Option<&str> {
     let suffix = &line[UA_PREFIX.len()..];
 
     if prefix == UA_PREFIX {
+        Some(suffix.trim())
+    } else {
+        None
+    }
+}
+
+fn parse_delay(line: &str) -> Option<u64> {
+    if line.len() < DELAY_PREFIX.len() {
+        return None;
+    }
+
+    let prefix = &line[..DELAY_PREFIX.len()].to_ascii_lowercase();
+    let suffix = &line[DELAY_PREFIX.len()..];
+    if prefix == DELAY_PREFIX {
         Some(suffix.trim())
     } else {
         None

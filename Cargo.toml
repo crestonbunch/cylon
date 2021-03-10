@@ -11,9 +11,9 @@ keywords = ["robots", "txt", "parse", "compile"]
 repository = "https://github.com/crestonbunch/cylon"
 
 [dependencies]
-futures-util = "0.3"
-serde = "1.0"
-serde_derive = "1.0"
+futures-util = "0.3.13"
+serde = "1.0.124"
+serde_derive = "1.0.124"
 
 [dev-dependencies]
 criterion = { version = "0.3", features = ["async_futures"] }
