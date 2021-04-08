@@ -11,6 +11,7 @@ the following directives (notably `Site-map` is missing):
 - `User-agent`
 - `Allow`
 - `Disallow`
+- `Crawl-Delay`
 
 In addition, Cylon supports `*` as a wildcard character to
 match any length substring of 0 or more characters, as well
@@ -18,7 +19,7 @@ as the `$` character to match the end of a path.
 
 ## Usage
 
-Using Cylon is very simple. Simply create a new complier
+Using Cylon is very simple. Simply create a new compiler
 for your user agent, then compile the robots.txt file.
 
 ```rust
