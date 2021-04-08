@@ -9,6 +9,7 @@ Disallow: /
 Allow: /a
 Allow: /abc
 Allow: /b
+Crawl-Delay: 20
 "#
 .as_bytes();
 

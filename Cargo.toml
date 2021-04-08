@@ -10,6 +10,9 @@ license = "MIT"
 keywords = ["robots", "txt", "parse", "compile"]
 repository = "https://github.com/crestonbunch/cylon"
 
+[features]
+crawl-delay = []
+
 [dependencies]
 futures-util = "0.3"
 serde = "1.0"

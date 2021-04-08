@@ -5,6 +5,8 @@ use futures_util::{
 };
 use serde_derive::{Deserialize, Serialize};
 const UA_PREFIX: &str = "user-agent:";
+#[cfg(feature = "crawl-delay")]
+const DELAY_PREFIX: &str = "crawl-delay:";
 const ALLOW_PREFIX: &str = "allow:";
 const DISALLOW_PREFIX: &str = "disallow:";
 
@@ -12,6 +14,8 @@ const DISALLOW_PREFIX: &str = "disallow:";
 enum ParsedRule {
     Allow(String),
     Disallow(String),
+    #[cfg(feature = "crawl-delay")]
+    Delay(String),
 }
 
 impl<'a> Into<Rule<'a>> for &'a ParsedRule {
@@ -19,6 +23,8 @@ impl<'a> Into<Rule<'a>> for &'a ParsedRule {
         match self {
             ParsedRule::Allow(path) => Rule::Allow(&path[..]),
             ParsedRule::Disallow(path) => Rule::Disallow(&path[..]),
+            #[cfg(feature = "crawl-delay")]
+            ParsedRule::Delay(delay) => Rule::Delay(delay),
         }
     }
 }
@@ -167,11 +173,21 @@ fn parse_line(line: String) -> ParsedLine {
 
     // This tries to parse lines roughly in order of most frequent kind to
     // least frequent kind in order to minimize CPU cycles on average.
-    parse_disallow(line)
+    
+    #[cfg(feature = "crawl-delay")]
+    return parse_disallow(line)
         .map(|s| ParsedLine::Rule(ParsedRule::Disallow(s.into())))
         .or_else(|| parse_user_agent(line).map(|s| ParsedLine::UserAgent(s.to_lowercase())))
         .or_else(|| parse_allow(line).map(|s| ParsedLine::Rule(ParsedRule::Allow(s.into()))))
-        .unwrap_or(ParsedLine::Nothing)
+        .or_else(|| parse_delay(line).map(|s| ParsedLine::Rule(ParsedRule::Delay(s.into()))))
+        .unwrap_or(ParsedLine::Nothing);
+        
+    #[cfg(not(feature = "crawl-delay"))]
+    return parse_disallow(line)
+        .map(|s| ParsedLine::Rule(ParsedRule::Disallow(s.into())))
+        .or_else(|| parse_user_agent(line).map(|s| ParsedLine::UserAgent(s.to_lowercase())))
+        .or_else(|| parse_allow(line).map(|s| ParsedLine::Rule(ParsedRule::Allow(s.into()))))
+        .unwrap_or(ParsedLine::Nothing);
 }
 
 fn strip_comments(line: &str) -> &str {
@@ -189,6 +205,21 @@ fn parse_user_agent(line: &str) -> Option<&str> {
     let suffix = &line[UA_PREFIX.len()..];
 
     if prefix == UA_PREFIX {
+        Some(suffix.trim())
+    } else {
+        None
+    }
+}
+
+#[cfg(feature = "crawl-delay")]
+fn parse_delay(line: &str) -> Option<&str> {
+    if line.len() < DELAY_PREFIX.len() {
+        return None;
+    }
+
+    let prefix = &line[..DELAY_PREFIX.len()].to_ascii_lowercase();
+    let suffix = &line[DELAY_PREFIX.len()..];
+    if prefix == DELAY_PREFIX {
         Some(suffix.trim())
     } else {
         None
@@ -294,11 +325,55 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "crawl-delay")]
+    fn test_crawl_delay() {
+        tokio_test::block_on(async {
+            let example_robots = r#"
+            User-agent: jones-bot
+            Disallow: /
+            Crawl-Delay: 30
+
+            User-agent: foobar
+            Crawl-Delay: 60
+
+            User-agent: googlebot
+            Allow: /
+
+            User-agent: barfoo
+            Crawl-Delay: 60
+            Crawl-Delay: 20
+            "#
+            .as_bytes();
+
+            let parser = Compiler::new("foobar");
+            let foobar_machine = parser.compile(example_robots).await.unwrap();
+
+            let parser = Compiler::new("googlebot");
+            let googlebot_machine = parser.compile(example_robots).await.unwrap();
+
+            let parser = Compiler::new("barfoo");
+            let barfoo_machine = parser.compile(example_robots).await.unwrap();
+
+            let parser = Compiler::new("jones-bot");
+            let jonesbot_machine = parser.compile(example_robots).await.unwrap();
+
+            assert_eq!(Some(60), foobar_machine.delay());
+            assert_eq!(Some(20), barfoo_machine.delay());
+            assert_eq!(Some(30), jonesbot_machine.delay());
+            assert_eq!(None, googlebot_machine.delay());
+        });
+    }
+
+    #[test]
     fn test_end_to_end() {
         tokio_test::block_on(async {
             let example_robots = r#"
             User-agent: jones-bot
             Disallow: /
+
+            User-agent: foo
+            Allow: /
+            Crawl-Delay: 20
 
             User-agent: jones
             User-agent: foobar
