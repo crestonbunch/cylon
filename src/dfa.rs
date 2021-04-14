@@ -45,7 +45,7 @@ enum State {
 /// file. By providing it a URL path, it can decide whether or not
 /// the robots file that compiled it allows or disallows that path in
 /// roughly O(n) time, where n is the length of the path.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Cylon {
     states: Vec<State>,
     transitions: Vec<Vec<Transition>>,
@@ -92,8 +92,7 @@ impl Cylon {
 
         // Follow the EoW transition, if necessary
         let t = &self.transitions[state];
-        t
-            .iter()
+        t.iter()
             .rev()
             .find(|transition| match transition {
                 Transition(Edge::MatchEow, ..) => true,
@@ -210,7 +209,7 @@ impl Cylon {
 
             states.push(match state {
                 #[cfg(feature = "crawl-delay")]
-                State::Allow | State::Disallow  | State::Delay => state,
+                State::Allow | State::Disallow | State::Delay => state,
                 #[cfg(not(feature = "crawl-delay"))]
                 State::Allow | State::Disallow => state,
                 State::Intermediate => states[wildcard_state],
@@ -220,22 +219,19 @@ impl Cylon {
 
         #[cfg(feature = "crawl-delay")]
         {
-            let mut delays: Vec<Option<u64>> = rules.iter().filter(|rule| { 
-                match rule {
+            let mut delays: Vec<Option<u64>> = rules
+                .iter()
+                .filter(|rule| match rule {
                     Rule::Delay(_) => true,
-                    _ => false
-                }
-            }).map(|r| {
-                r.inner().parse::<u64>().ok()
-            }).collect();
-            delays.sort_unstable_by(|a, b| {
-                match (a, b) {
-                    (None, Some(_)) => Ordering::Greater,
-                    (Some(_), None) => Ordering::Less,
-                    (None, None) => Ordering::Equal,
-                    (Some(aa), Some(bb)) => aa.cmp(bb)
-
-                }
+                    _ => false,
+                })
+                .map(|r| r.inner().parse::<u64>().ok())
+                .collect();
+            delays.sort_unstable_by(|a, b| match (a, b) {
+                (None, Some(_)) => Ordering::Greater,
+                (Some(_), None) => Ordering::Less,
+                (None, None) => Ordering::Equal,
+                (Some(aa), Some(bb)) => aa.cmp(bb),
             });
             Self {
                 delay: *delays.get(0).unwrap_or(&None),

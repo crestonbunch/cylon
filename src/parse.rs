@@ -39,7 +39,7 @@ enum ParsedLine {
 /// A compiler takes an input robots.txt file and outputs a compiled Cylon,
 /// which can be used to efficiently match a large number of paths against
 /// the robots.txt file.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Compiler {
     user_agent: String,
 }
@@ -173,7 +173,7 @@ fn parse_line(line: String) -> ParsedLine {
 
     // This tries to parse lines roughly in order of most frequent kind to
     // least frequent kind in order to minimize CPU cycles on average.
-    
+
     #[cfg(feature = "crawl-delay")]
     return parse_disallow(line)
         .map(|s| ParsedLine::Rule(ParsedRule::Disallow(s.into())))
@@ -181,7 +181,7 @@ fn parse_line(line: String) -> ParsedLine {
         .or_else(|| parse_allow(line).map(|s| ParsedLine::Rule(ParsedRule::Allow(s.into()))))
         .or_else(|| parse_delay(line).map(|s| ParsedLine::Rule(ParsedRule::Delay(s.into()))))
         .unwrap_or(ParsedLine::Nothing);
-        
+
     #[cfg(not(feature = "crawl-delay"))]
     return parse_disallow(line)
         .map(|s| ParsedLine::Rule(ParsedRule::Disallow(s.into())))
