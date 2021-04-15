@@ -21,10 +21,10 @@ enum ParsedRule {
 impl<'a> Into<Rule<'a>> for &'a ParsedRule {
     fn into(self) -> Rule<'a> {
         match self {
-            ParsedRule::Allow(path) => Rule::Allow(&path[..]),
-            ParsedRule::Disallow(path) => Rule::Disallow(&path[..]),
+            ParsedRule::Allow(path) => Rule::Allow(path.as_bytes()),
+            ParsedRule::Disallow(path) => Rule::Disallow(path.as_bytes()),
             #[cfg(feature = "crawl-delay")]
-            ParsedRule::Delay(delay) => Rule::Delay(delay),
+            ParsedRule::Delay(delay) => Rule::Delay(delay.as_bytes()),
         }
     }
 }
@@ -451,6 +451,38 @@ mod tests {
 
             assert_eq!(false, foobar_machine.allow("/index.html"));
             assert_eq!(true, imabot_machine.allow("/index.html"));
+        });
+    }
+
+    #[test]
+    fn test_unicode_support() {
+        tokio_test::block_on(async {
+            // From: wikipedia.org/robots.txt
+            let example_robots = r#"
+            User-agent: test
+            Disallow: /wiki/ויקיפדיה:רשימת_מועמדים_למחיקה/
+            Disallow: /wiki/ויקיפדיה%3Aרשימת_מועמדים_למחיקה/
+            Disallow: /wiki/%D7%95%D7%99%D7%A7%D7%99%D7%A4%D7%93%D7%99%D7%94:%D7%A8%D7%A9%D7%99%D7%9E%D7%AA_%D7%9E%D7%95%D7%A2%D7%9E%D7%93%D7%99%D7%9D_%D7%9C%D7%9E%D7%97%D7%99%D7%A7%D7%94/
+            Disallow: /wiki/%D7%95%D7%99%D7%A7%D7%99%D7%A4%D7%93%D7%99%D7%94%3A%D7%A8%D7%A9%D7%99%D7%9E%D7%AA_%D7%9E%D7%95%D7%A2%D7%9E%D7%93%D7%99%D7%9D_%D7%9C%D7%9E%D7%97%D7%99%D7%A7%D7%94/
+            Disallow: /wiki/ויקיפדיה:ערכים_לא_קיימים_ומוגנים
+            Disallow: /wiki/ויקיפדיה%3Aערכים_לא_קיימים_ומוגנים
+            Disallow: /wiki/%D7%95%D7%99%D7%A7%D7%99%D7%A4%D7%93%D7%99%D7%94:%D7%A2%D7%A8%D7%9B%D7%99%D7%9D_%D7%9C%D7%90_%D7%A7%D7%99%D7%99%D7%9E%D7%99%D7%9D_%D7%95%D7%9E%D7%95%D7%92%D7%A0%D7%99%D7%9D
+            Disallow: /wiki/%D7%95%D7%99%D7%A7%D7%99%D7%A4%D7%93%D7%99%D7%94%3A%D7%A2%D7%A8%D7%9B%D7%99%D7%9D_%D7%9C%D7%90_%D7%A7%D7%99%D7%99%D7%9E%D7%99%D7%9D_%D7%95%D7%9E%D7%95%D7%92%D7%A0%D7%99%D7%9D
+            Disallow: /wiki/ויקיפדיה:דפים_לא_קיימים_ומוגנים
+            Disallow: /wiki/ויקיפדיה%3Aדפים_לא_קיימים_ומוגנים
+            Disallow: /wiki/%D7%95%D7%99%D7%A7%D7%99%D7%A4%D7%93%D7%99%D7%94:%D7%93%D7%A4%D7%99%D7%9D_%D7%9C%D7%90_%D7%A7%D7%99%D7%99%D7%9E%D7%99%D7%9D_%D7%95%D7%9E%D7%95%D7%92%D7%A0%D7%99%D7%9D
+            Disallow: /wiki/%D7%95%D7%99%D7%A7%D7%99%D7%A4%D7%93%D7%99%D7%94%3A%D7%93%D7%A4%D7%99%D7%9D_%D7%9C%D7%90_%D7%A7%D7%99%D7%99%D7%9E%D7%99%D7%9D_%D7%95%D7%9E%D7%95%D7%92%D7%A0%D7%99%D7%9D
+            "#
+            .as_bytes();
+
+            let parser = Compiler::new("test");
+            let machine = parser.compile(example_robots).await.unwrap();
+
+            assert_eq!(true, machine.allow("/index.html"));
+            assert_eq!(
+                false,
+                machine.allow("/wiki/ויקיפדיה:ערכים_לא_קיימים_ומוגנים")
+            );
         });
     }
 }
