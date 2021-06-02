@@ -1,1 +1,5 @@
 /target
+
+#IDE specific
+/.devcontainer
+/.vscode
