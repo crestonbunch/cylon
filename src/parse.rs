@@ -1,8 +1,5 @@
 use super::dfa::{Cylon, Rule};
-use futures_util::{
-    io::{AsyncBufRead, AsyncRead, BufReader, Result},
-    AsyncBufReadExt,
-};
+use futures_util::io::{AsyncBufRead, AsyncBufReadExt, AsyncRead, BufReader, Result};
 use serde_derive::{Deserialize, Serialize};
 const UA_PREFIX: &str = "user-agent:";
 #[cfg(feature = "crawl-delay")]
