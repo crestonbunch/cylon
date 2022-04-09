@@ -1,5 +1,5 @@
-mod dfa;
+mod nfa;
 mod parse;
 
-pub use dfa::Cylon;
+pub use nfa::Cylon;
 pub use parse::Compiler;
