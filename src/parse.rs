@@ -1,4 +1,6 @@
-use super::dfa::{Cylon, Rule};
+use std::collections::BTreeMap;
+
+use super::nfa::{Cylon, Rule};
 use futures_util::{
     io::{AsyncBufRead, AsyncRead, BufReader, Result},
     AsyncBufReadExt,
@@ -18,9 +20,9 @@ enum ParsedRule {
     Delay(String),
 }
 
-impl<'a> Into<Rule<'a>> for &'a ParsedRule {
-    fn into(self) -> Rule<'a> {
-        match self {
+impl<'a> From<&'a ParsedRule> for Rule<'a> {
+    fn from(rule: &ParsedRule) -> Rule<'_> {
+        match rule {
             ParsedRule::Allow(path) => Rule::Allow(path.as_bytes()),
             ParsedRule::Disallow(path) => Rule::Disallow(path.as_bytes()),
             #[cfg(feature = "crawl-delay")]
@@ -75,8 +77,29 @@ impl Compiler {
             }
         }
 
-        let rules = rules.iter().map(|r| r.into()).collect();
+        let rules = Compiler::filter_dupes(&rules);
         Ok(Cylon::compile(rules))
+    }
+
+    fn filter_dupes(rules: &[ParsedRule]) -> Vec<Rule<'_>> {
+        let mut dedupe = BTreeMap::new();
+        for rule in rules {
+            match rule {
+                ParsedRule::Allow(inner) => {
+                    dedupe.insert(inner.clone(), rule.into());
+                }
+                #[cfg(feature = "crawl-delay")]
+                ParsedRule::Delay(inner) => {
+                    dedupe.insert(inner.clone(), rule.into());
+                }
+                ParsedRule::Disallow(inner) => {
+                    if !dedupe.contains_key(inner) {
+                        dedupe.insert(inner.clone(), rule.into());
+                    }
+                }
+            }
+        }
+        dedupe.into_values().collect()
     }
 }
 
@@ -192,9 +215,10 @@ fn parse_line(line: String) -> ParsedLine {
 
 fn strip_comments(line: &str) -> &str {
     if let Some(before) = line.split('#').next() {
-        return before;
+        before
+    } else {
+        line
     }
-    return line;
 }
 
 fn parse_user_agent(line: &str) -> Option<&str> {
