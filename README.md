@@ -4,18 +4,21 @@ Cylon is a library for reading robots.txt files.
 
 ## Features
 
-There is no universal standard for what rules a web crawler
-is required to support in a robots.txt file. Cylon supports
-the following directives (notably `Site-map` is missing):
+Cylon attempts to remain compatible with the [Robots
+Exclusion Protocol](https://datatracker.ietf.org/doc/html/draft-koster-rep).
 
-- `User-agent`
+The following directives are supported (notably `Site-map` is missing):
+
+- `User-Agent`
 - `Allow`
 - `Disallow`
-- `Crawl-Delay`
+- `Crawl-Delay` (Optional, enable using the `crawl-delay` feature)
 
-In addition, Cylon supports `*` as a wildcard character to
-match any length substring of 0 or more characters, as well
-as the `$` character to match the end of a path.
+The following special characters are supported:
+
+- `*` - a wildcard character to match any lench substring
+- `$` - matches the end of a path
+- `#` - denotes a comment that is ignored by Cylon
 
 ## Usage
 
