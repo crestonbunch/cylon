@@ -68,21 +68,38 @@ adding one yourself (contributions are welcome).
 
 ### Performance
 
-Cylon compiles robots.txt files into very efficient DFAs. This means it is
-well-suited for web crawlers that need to use the same robots.txt file for
-multiple URLs.
+Cylon compiles robots.txt files into a NFA. This means it is well-suited
+for web crawlers that need to use the same robots.txt file for multiple URLs.
+Re-using the same compiled Cylon NFA will avoid repeated work. The NFA is
+generally more efficient than naive matching. There are some degenerate
+cases where it may perform worse.
 
-The compiler avoids any random memory access when compiling the DFA (e.g. by
-not using hashmaps or tree structures.) so it has very good cache-locality.
+Cylon minimizes random memory access when compiling and running the
+NFA to maximize cache-locality.
 
-The DFA can match input paths in roughly O(n) time, where n is the length of
-the input path. (Compare that to the alternative O(n \* m) complexity of
-matching the input path against every rule in the robots.txt file.)
+Runtime performance for matching URLs is O(n^k). Suppose the length of the
+input is n, the number of NFA states is m, and the average number of states
+that match the input is k. In the worst case m == k. In practice m << k.
+To trigger a degenerate case would require many wildcard matches. A typical
+value of k may be between 2 and 5.
+
+The number of NFA states m is proportional to the number of unique prefixes
+in the robots.txt file. The number of states per input token k is proportional
+to the number of times each unique prefix appears in the robots.txt file.
+Wildcard matches also increase k. Special care is taken to avoid exponential
+runtime when encounting repeated wildcard matches e.g. 'Allow: /\*\*\*\*\*'.
+Multiple repeated wildcards are treated as a single wildcard.
+
+It is important to understand the runtime tradeoffs with a naive approach.
+The naive matching approach would require O(n \* p \* q) comparisons where
+you match the n-length path against q p-length rules in the robots.txt file.
+For situations where you need to match many inputs against a single robot.txt
+file, this performance may be worse. In general k << q.
 
 ### (De-)serialization
 
 This library uses serde to allow serializing/deserializing the compiled Cylon
-DFA structs. This is useful e.g. if you need to cache the DFA in something like
+NFA structs. This is useful e.g. if you need to cache the NFA in something like
 Memcached or Redis. (Use a format like bincode or msgpack to convert it to
 bytes first.)
 

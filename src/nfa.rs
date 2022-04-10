@@ -133,16 +133,17 @@ impl<'a> Default for QueueItem<'a> {
 /// file. By providing it a URL path, it can decide whether or not
 /// the robots file that compiled it allows or disallows that path.
 ///
-/// The preformance is on average O(n * m), where n is the length of the path
-/// and m is the average number of edges from one NFA state (i.e., the average
-/// number of occurrences of each prefix in the rules.)
+/// The performance is on average O(n ^ k), where n is the length of the path
+/// and k is the average number of transitions from one prefix. This
+/// exponontial runtime is acceptable in most cases because k tends to be
+/// very small.
 ///
 /// Contrast that with the naive approach of matching each rule individually.
-/// If you can match a rule in O(n) time and there are k rules, then the
-/// performance will also be O(n * k). However the NFA is likely more
+/// If you can match a rule in O(n) time and there are p rules of length q,
+/// then the performance will be O(n * p * q). However the NFA is likely more
 /// efficient, because it can avoid matching the same prefix multiple times.
-/// If there are p prefixes and each prefix is used m times, then the naive
-/// approach must make O(p * m) comparisons whereas the NFA only makes O(p)
+/// If there are x prefixes and each prefix is used y times, then the naive
+/// approach must make O(x * y) comparisons whereas the NFA only makes O(y)
 /// comparisons.
 ///
 /// In general robots.txt files have a lot of shared prefixes due to the
@@ -194,7 +195,11 @@ impl Cylon {
     }
 
     pub fn compile(mut rules: Vec<Rule>) -> Self {
-        let mut states: Vec<Node> = vec![Node::new(Accept::Allow, 0)];
+        let mut first = Node::new(Accept::Allow, 0);
+        let second = Node::new(Accept::Allow, 0);
+        first.add_wildcard(1);
+
+        let mut states: Vec<Node> = vec![first, second];
         let mut queue = VecDeque::new();
         queue.push_back(QueueItem::default());
         rules.sort_by(|a, b| Ord::cmp(a.inner(), b.inner()));
@@ -225,13 +230,15 @@ impl Cylon {
 
                 let state = states.len();
                 let edge = *prefix.last().unwrap();
+                let parent_edge = parent_prefix.last();
                 let parent_node = states.get_mut(parent_state).unwrap();
                 let mut child_node = Node::new(accept_state, prefix.len());
                 let mut wildcard_node = None;
                 let mut queue_item = QueueItem::new(prefix, state);
 
                 match edge {
-                    WILDCARD_BYTE => {
+                    WILDCARD_BYTE if parent_edge != Some(&WILDCARD_BYTE) => {
+                        child_node.add_wildcard(state);
                         parent_node.add_wildcard(state);
 
                         if is_terminal {
@@ -252,6 +259,14 @@ impl Cylon {
                         // an epsilon transition from this nodes parent to this
                         // node's children.
                         queue_item.epsilon_state = Some(parent_state);
+                    }
+                    WILDCARD_BYTE => {
+                        // Avoid the extremely inefficient degenerate case of multiple
+                        // repeated wildcard characters by simply ignoring them.
+                        last_prefix = prefix;
+                        queue_item.parent_state = parent_state;
+                        queue.push_back(queue_item);
+                        continue;
                     }
                     EOW_BYTE => {
                         parent_node.add_wildcard(state);
@@ -434,15 +449,16 @@ mod tests {
         ];
 
         let expect_nodes = vec![
-            n!('a' 0 vec![(b!('/'), 1)]),                           // ''
-            n!('a' 1 vec![(b!('a'), 2)]),                           // '/'
-            n!('a' 2 vec![3, 4], vec![(b!('b'), 5), (b!('c'), 6)]), // '/a'
+            n!('a' 0 1, vec![(b!('/'), 2)]),                        // ''
+            n!('a' 0 vec![]),                                       // '' wildcard
+            n!('a' 1 1, vec![(b!('a'), 3)]),                        // '/'
+            n!('a' 2 vec![4, 5], vec![(b!('b'), 6), (b!('c'), 7)]), // '/a'
             n!('a' 2 vec![]),                                       // '/a' wildcard
-            n!('a' 3 vec![(b!('c'), 6)]),                           // '/a*'
-            n!('a' 3 vec![3, 4], vec![(b!('c'), 8)]),               // '/ab'
-            n!('a' 4 7, vec![]),                                    // '/a*c'
+            n!('a' 3 5, vec![(b!('c'), 7)]),                        // '/a*'
+            n!('a' 3 vec![4, 5], vec![(b!('c'), 9)]),               // '/ab'
+            n!('a' 4 8, vec![]),                                    // '/a*c'
             n!('a' 4 vec![]),                                       // '/a*c' wildcard
-            n!('d' 4 9, vec![]),                                    // '/abc'
+            n!('d' 4 10, vec![]),                                   // '/abc'
             n!('d' 4 vec![]),                                       // '/abc' wildcard
         ];
 
@@ -463,13 +479,29 @@ mod tests {
         ];
 
         let expect_nodes = vec![
-            n!('a' 0 vec![(b!('/'), 1)]),             // ''
-            n!('a' 1 vec![(b!('a'), 2)]),             // '/'
-            n!('d' 3 vec![3, 4], vec![(b!('b'), 5)]), // '/a$'
+            n!('a' 0 1, vec![(b!('/'), 2)]),          // ''
+            n!('a' 0 vec![]),                         // '' wildcard
+            n!('a' 1 1, vec![(b!('a'), 3)]),          // '/'
+            n!('d' 3 vec![4, 5], vec![(b!('b'), 6)]), // '/a$'
             n!('a' 2 vec![]),                         // '/a' wildcard
             n!('a' 3 vec![]),                         // '/a$' wildcard
-            n!('d' 3 6, vec![]),                      // '/ab'
+            n!('d' 3 7, vec![]),                      // '/ab'
             n!('d' 3 vec![]),                         // '/ab' wildcard
+        ];
+
+        let actual = Cylon::compile(rules);
+        assert_eq!(actual.states, expect_nodes);
+    }
+
+    #[test]
+    fn test_degenerate_1() {
+        let rules = vec![Rule::Allow(b"/****************************")];
+
+        let expect_nodes = vec![
+            n!('a' 0 1, vec![(b!('/'), 2)]), // ''
+            n!('a' 0 vec![]),                // '' wildcard
+            n!('a' 1 vec![1, 3], vec![]),    // '/'
+            n!('a' 2 3, vec![]),             // '/*'
         ];
 
         let actual = Cylon::compile(rules);
@@ -623,14 +655,6 @@ mod tests {
         assert_eq!(false, machine.allow("/Fish.asp"));
         assert_eq!(false, machine.allow("/catfish"));
         assert_eq!(false, machine.allow("/?id=fish"));
-
-        let machine = Cylon::compile(vec![Rule::Disallow(b"/"), Rule::Allow(b"/fish/")]);
-        assert_eq!(true, machine.allow("/fish/"));
-        assert_eq!(true, machine.allow("/fish/?id=anything"));
-        assert_eq!(true, machine.allow("/fish/salmon.htm"));
-        assert_eq!(false, machine.allow("/fish"));
-        assert_eq!(false, machine.allow("/fish.html"));
-        assert_eq!(false, machine.allow("/Fish/Salmon.asp"));
 
         let machine = Cylon::compile(vec![Rule::Disallow(b"/"), Rule::Allow(b"/*.php")]);
         assert_eq!(true, machine.allow("/filename.php"));

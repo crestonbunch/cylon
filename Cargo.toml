@@ -1,7 +1,7 @@
 [package]
 name = "cylon"
 description = "An efficient compiler for robots.txt files"
-version = "0.3.0"
+version = "0.3.1"
 authors = ["Creston Bunch <rust@bunch.im>"]
 edition = "2018"
 
